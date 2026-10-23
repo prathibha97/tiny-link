@@ -1,6 +1,7 @@
 package shortener
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -51,9 +52,9 @@ func TestRedirect(t *testing.T) {
 	store := NewURLStore()
 	handler := NewHandler(store, "http://localhost:8080")
 
-	store.Save(URLMapping{
-		short_code:   "go123",
-		original_url: "https://go.dev",
+	store.Save(context.Background(), URLMapping{
+		Code:        "go123",
+		OriginalURL: "https://go.dev",
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/go123", nil)

@@ -1,10 +1,13 @@
 package shortener
 
-import "sync"
+import (
+	"context"
+	"sync"
+)
 
 type URLMapping struct {
-	original_url string
-	short_code   string
+	Code        string
+	OriginalURL string
 }
 
 type URLStore struct {
@@ -18,17 +21,30 @@ func NewURLStore() *URLStore {
 	}
 }
 
-func (s *URLStore) Save(mapping URLMapping) {
+func (s *URLStore) Save(ctx context.Context, mapping URLMapping) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.urls[mapping.short_code] = mapping
+	s.urls[mapping.Code] = mapping
+	return nil
 }
 
-func (s *URLStore) Get(short_code string) (URLMapping, bool) {
+func (s *URLStore) Get(ctx context.Context, code string) (URLMapping, error) {
+	if err := ctx.Err(); err != nil {
+		return URLMapping{}, err
+	}
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	mapping, ok := s.urls[short_code]
-	return mapping, ok
+	mapping, ok := s.urls[code]
+	if !ok {
+		return URLMapping{}, ErrNotFound
+	}
+
+	return mapping, nil
 }

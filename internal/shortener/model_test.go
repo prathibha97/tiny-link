@@ -1,6 +1,8 @@
 package shortener
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -10,28 +12,31 @@ func TestURLStoreSaveAndGet(t *testing.T) {
 	store := NewURLStore()
 
 	want := URLMapping{
-		short_code:   "go123",
-		original_url: "https://go.dev",
+		Code:        "go123",
+		OriginalURL: "https://go.dev",
 	}
 
-	store.Save(want)
-
-	got, ok := store.Get("go123")
-	if !ok {
-		t.Fatal("expected mapping to exist")
+	if err := store.Save(context.Background(), want); err != nil {
+		t.Fatal(err)
 	}
 
-	if got != want {
-		t.Errorf("got %+v, want %+v", got, want)
+	mapping, err := store.Get(context.Background(), "go123")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if mapping != want {
+		t.Fatalf("got %v, want %v", mapping, want)
 	}
 }
 
 func TestURLStoreGetMissing(t *testing.T) {
 	store := NewURLStore()
 
-	_, ok := store.Get("missing")
-	if ok {
-		t.Fatal("expected missing mapping to return false")
+	_, err := store.Get(context.Background(), "missing")
+
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("expected ErrNotFound, got %v", err)
 	}
 }
 
@@ -48,11 +53,11 @@ func TestURLStoreConcurrentAccess(t *testing.T) {
 
 			code := fmt.Sprintf("code-%d", i)
 
-			store.Save(URLMapping{
-				short_code:   code,
-				original_url: "https://go.dev",
+			store.Save(context.Background(), URLMapping{
+				Code:        code,
+				OriginalURL: "https://go.dev",
 			})
-			store.Get(code)
+			store.Get(context.Background(), code)
 		}(i)
 	}
 	wg.Wait()

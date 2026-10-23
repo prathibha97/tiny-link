@@ -12,7 +12,7 @@ import (
 )
 
 type Handler struct {
-	store    *URLStore
+	store    Store
 	base_url string
 }
 
@@ -26,7 +26,7 @@ type createURLResponse struct {
 	OriginalURL string `json:"original_url"`
 }
 
-func NewHandler(store *URLStore, base_url string) *Handler {
+func NewHandler(store Store, base_url string) *Handler {
 	return &Handler{
 		store:    store,
 		base_url: strings.TrimRight(base_url, "/"),
@@ -80,16 +80,21 @@ func (h *Handler) CreateURL(w http.ResponseWriter, r *http.Request) {
 	}
 
 	mapping := URLMapping{
-		short_code:   code,
-		original_url: parsed.String(),
+		Code:        code,
+		OriginalURL: parsed.String(),
 	}
 
-	h.store.Save(mapping)
+	if err := h.store.Save(r.Context(), mapping); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "could not save URL mapping",
+		})
+		return
+	}
 
 	writeJSON(w, http.StatusCreated, createURLResponse{
 		Code:        code,
 		ShortURL:    h.base_url + "/" + code,
-		OriginalURL: mapping.original_url,
+		OriginalURL: mapping.OriginalURL,
 	})
 }
 
@@ -106,12 +111,19 @@ func (h *Handler) Redirect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	mapping, ok := h.store.Get(code)
-	if !ok {
+	mapping, err := h.store.Get(r.Context(), code)
+
+	if errors.Is(err, ErrNotFound) {
 		http.NotFound(w, r)
 		return
 	}
-	http.Redirect(w, r, mapping.original_url, http.StatusFound)
+
+	if err != nil {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	http.Redirect(w, r, mapping.OriginalURL, http.StatusFound)
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {
