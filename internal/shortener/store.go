@@ -5,7 +5,10 @@ import (
 	"errors"
 )
 
-var ErrNotFound = errors.New("URL mapping not found")
+var (
+	ErrNotFound     = errors.New("URL mapping not found")
+	ErrCodeConflict = errors.New("short code already exists")
+)
 
 type Store interface {
 	Save(ctx context.Context,

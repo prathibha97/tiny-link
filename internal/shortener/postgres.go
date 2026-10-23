@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -43,8 +44,13 @@ func (s *PostgresStore) Save(
 		mapping.OriginalURL,
 	)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return fmt.Errorf("%w: %s", ErrCodeConflict, mapping.Code)
+		}
 		return fmt.Errorf("save url mapping: %w", err)
 	}
+
 	return nil
 }
 

@@ -71,29 +71,51 @@ func (h *Handler) CreateURL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	code, err := generateCode()
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{
-			"error": "could not generate short code",
-		})
-		return
-	}
+	const maxAttempts = 5
 
-	mapping := URLMapping{
-		Code:        code,
-		OriginalURL: parsed.String(),
-	}
+	var mapping URLMapping
+	saved := false
 
-	if err := h.store.Save(r.Context(), mapping); err != nil {
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		code, err := generateCode()
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{
+				"error": "could not generate short code",
+			})
+			return
+		}
+
+		mapping = URLMapping{
+			Code:        code,
+			OriginalURL: parsed.String(),
+		}
+
+		err = h.store.Save(r.Context(), mapping)
+		if err == nil {
+			saved = true
+			break
+		}
+
+		if errors.Is(err, ErrCodeConflict) {
+			continue
+		}
+
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
 			"error": "could not save URL mapping",
 		})
 		return
 	}
 
+	if !saved {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "could not generate a unique short code",
+		})
+		return
+	}
+
 	writeJSON(w, http.StatusCreated, createURLResponse{
-		Code:        code,
-		ShortURL:    h.base_url + "/" + code,
+		Code:        mapping.Code,
+		ShortURL:    h.base_url + "/" + mapping.Code,
 		OriginalURL: mapping.OriginalURL,
 	})
 }
